@@ -159,4 +159,55 @@ cython_debug/
 #  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
-#.idea/
+.idea/
+# Node.js dependencies
+/node_modules/
+
+# Optional npm cache directory
+/.npm/
+
+# Optional: local environment variables file
+.env
+
+# Log files
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Operating System files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+
+# Build outputs
+dist/
+build/
+out/
+
+# Coverage directory used by tools like istanbul
+coverage/
+
+# Miscellaneous files
+*.tgz
+*.gz
+*.zip
+*.tar
+
+# TypeScript files
+*.tsbuildinfo
+*.d.ts
+
+# Temporary files
+temp/
+tmp/
+
+# MacOS specific
+*.DS_Store
+
+# NPM Debug logs
+npm-debug.log*
