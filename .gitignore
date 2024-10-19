@@ -211,3 +211,5 @@ tmp/
 
 # NPM Debug logs
 npm-debug.log*
+
+*.db

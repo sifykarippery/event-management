@@ -4,19 +4,38 @@ from typing import List
 from datetime import datetime
 
 
-class Event(BaseModel):
-    id: int = None
+class UserBase(BaseModel):
+    username: str
+
+
+class UserCreate(UserBase):
+    password: str
+
+class User(UserBase):
+    id: int
+
+    class Config:
+        from_attributes = True
+
+class EventBase(BaseModel):
     title: str
-    organizer: str
     date_time: datetime
     duration: int
     location: str
-    joiners: List[str] = []
 
+class EventCreate(EventBase):
+    pass
 
-class JoinRequest(BaseModel):
-    user: str
+class EventRequest(BaseModel):
+    event: EventCreate  # Embed the event details
+    user_id: int
 
+class Event(EventBase):
+    id: int
+    organizer: User
+    joiners: List[User] = []
 
-class CancelRequest(BaseModel):
-    event_id: int
+    class Config:
+        from_attributes = True
+class JoinEventRequest(BaseModel):
+    user_id: int

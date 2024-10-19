@@ -1,141 +1,204 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import axios from "axios";
+import Registration from "./components/Registration";
 
 const App = () => {
   const [events, setEvents] = useState([]);
-  const [newEvent, setNewEvent] = useState({
-    title: "",
-    organizer: "",
-    date_time: "",
-    duration: 60,
-    location: "",
-  });
+  const [currentUser, setCurrentUser] = useState(null);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [socket, setSocket] = useState(null);
+  const [newEvent, setNewEvent] = useState({ title: "", location: "", dateTime: "", duration: "" });
 
-  // WebSocket setup
   useEffect(() => {
-    const ws = new WebSocket("ws://localhost:8000/ws");
+    axios.get("http://localhost:8000/events/").then((response) => {
+      setEvents(response.data);
+    });
 
-    ws.onmessage = (event) => {
-      console.log(event.data); // Handle real-time updates
-      fetchEvents();
-    };
+    const ws = new WebSocket("ws://localhost:8000/ws");
+    setSocket(ws);
 
     return () => {
-      ws.close();
+      if (ws) ws.close();
     };
   }, []);
 
-  const fetchEvents = async () => {
-    const response = await axios.get("http://localhost:8000/events/");
-    setEvents(response.data);
+  useEffect(() => {
+    if (socket) {
+      socket.onmessage = (event) => {
+        const updatedEvent = JSON.parse(event.data);
+        setEvents((prevEvents) => {
+          if (updatedEvent.event_id) {
+            if (updatedEvent.title) {
+              return [...prevEvents, updatedEvent];
+            } else {
+              return prevEvents.map((ev) =>
+                ev.id === updatedEvent.event_id
+                  ? { ...ev, joiners: updatedEvent.joiners }
+                  : ev
+              );
+            }
+          }
+          return prevEvents;
+        });
+      };
+    }
+  }, [socket]);
+
+  const createEvent = async () => {
+    if (currentUser) {
+      const eventDetails = {
+        title: newEvent.title,
+        location: newEvent.location,
+        date_time: newEvent.dateTime,
+        duration: newEvent.duration,
+      };
+
+      try {
+        const response = await axios.post("http://localhost:8000/events/", {
+          event: eventDetails,
+          user_id: currentUser.id,
+        });
+        console.log(response.data);
+      } catch (error) {
+        console.error("Error creating event:", error.response.data);
+      }
+    } else {
+      alert("Please log in to create an event.");
+    }
+  };
+
+  const handleLogin = () => {
+    axios.post("http://localhost:8000/login", { username, password })
+      .then((response) => {
+        setCurrentUser(response.data);
+        localStorage.setItem("user", JSON.stringify(response.data));
+      }).catch((error) => {
+        console.error("Login error", error);
+      });
   };
 
   useEffect(() => {
-    fetchEvents();
+    const storedUser = localStorage.getItem("user");
+    if (storedUser) {
+      setCurrentUser(JSON.parse(storedUser));
+    }
   }, []);
 
-  const createEvent = async () => {
-    try {
-      await axios.post("http://localhost:8000/events/", {
-        title: newEvent.title,
-        organizer: newEvent.organizer,
-        date_time: newEvent.date_time,  // Ensure it's a valid ISO datetime string
-        duration: parseInt(newEvent.duration, 10),  // Ensure it's an integer
-        location: newEvent.location
-      });
-      setNewEvent({
-        title: "",
-        organizer: "",
-        date_time: "",
-        duration: 60,
-        location: ""
-      });
-      fetchEvents();  // Refresh event list after creation
-    } catch (error) {
-      console.error("Error creating event:", error);
+  const joinEvent = (eventId) => {
+    if (currentUser) {
+      axios.post(`http://localhost:8000/events/${eventId}/join`, { user_id: currentUser.id })
+        .then((response) => {
+          console.log(response.data.message);
+        })
+        .catch((error) => {
+          console.error("Error joining event:", error);
+        });
+    } else {
+      alert("Please log in to join an event.");
     }
   };
-  const joinEvent = async (eventId) => {
-    try {
-        const payload = { user: "John Doe" };  // Replace with actual user information
-        await axios.put(`http://localhost:8000/events/${eventId}/join`, payload);
-        fetchEvents();  // Refresh the list of events
-    } catch (error) {
-        console.error("Error joining event:", error);
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    localStorage.removeItem("user");
+  };
+
+  const leaveEvent = (eventId) => {
+    if (currentUser) {
+      axios.post(`http://localhost:8000/events/${eventId}/leave`, { user_id: currentUser.id })
+        .then((response) => {
+          // Event will be updated via WebSocket, no need to manually update
+        }).catch((error) => {
+          console.error("Error leaving event:", error);
+        });
+    } else {
+      alert("Please log in to leave an event.");
     }
-};
-const unjoinEvent = async (eventId) => {
-  try {
-    const payload = { user: "John Doe" }; // Replace with the actual user name
-    await axios.put(`http://localhost:8000/events/${eventId}/unjoin`, payload);
-    fetchEvents(); // Refresh the list of events
-  } catch (error) {
-    console.error("Error unjoining event:", error);
-  }
-};
-
-const cancelEvent = async (eventId) => {
-  try {
-    await axios.delete("http://localhost:8000/events/cancel", {
-      data: { event_id: eventId },
-    });
-    fetchEvents(); // Refresh the list of events
-  } catch (error) {
-    console.error("Error cancelling event:", error);
-  }
-};
-
+  };
 
   return (
     <div>
-      <h1>Event Management</h1>
+      <h1>Event List</h1>
 
-      <h2>Create Event</h2>
-      <input
-        type="text"
-        placeholder="Title"
-        value={newEvent.title}
-        onChange={(e) => setNewEvent({ ...newEvent, title: e.target.value })}
-      />
-      <input
-        type="text"
-        placeholder="Organizer"
-        value={newEvent.organizer}
-        onChange={(e) =>
-          setNewEvent({ ...newEvent, organizer: e.target.value })
-        }
-      />
-      <input
-        type="datetime-local"
-        value={newEvent.date_time}
-        onChange={(e) => setNewEvent({ ...newEvent, date_time: e.target.value })}
-      />
-      <input
-        type="text"
-        placeholder="Location"
-        value={newEvent.location}
-        onChange={(e) =>
-          setNewEvent({ ...newEvent, location: e.target.value })
-        }
-      />
-      <button onClick={createEvent}>Create Event</button>
+      {!currentUser && (
+        <div>
+          <h2>Login</h2>
+          <input
+            type="text"
+            placeholder="Enter username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+          />
+          <input
+            type="password"
+            placeholder="Enter password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+          <button onClick={handleLogin}>Login</button>
+        </div>
+      )}
 
-      <h2>Events</h2>
-      <ul>
-        {events.map((event) => (
-          <li key={event.id}>
-            <h3>{event.title}</h3>
-            <p>Organizer: {event.organizer}</p>
-            <p>Date: {event.date_time}</p>
-            <p>Location: {event.location}</p>
-            <p>Duration: {event.duration} minutes</p>
-            <p>Joiners: {event.joiners.join(", ")}</p>
-            <button onClick={() => joinEvent(event.id)}>Join Event</button>
-            <button onClick={() => unjoinEvent(event.id)}>Leave Event</button>
-            <button onClick={() => cancelEvent(event.id)}>Cancel Event</button>
-          </li>
-        ))}
-      </ul>
+      {currentUser && (
+        <div>
+          <h2>Welcome, {currentUser.username}!</h2>
+          <button onClick={handleLogout}>Logout</button>
+        </div>
+      )}
+
+      {!currentUser && <Registration />}
+
+      {currentUser && (
+        <div>
+          <h2>Create Event</h2>
+          <input
+            type="text"
+            placeholder="Event Title"
+            value={newEvent.title}
+            onChange={(e) => setNewEvent({ ...newEvent, title: e.target.value })}
+          />
+          <input
+            type="text"
+            placeholder="Location"
+            value={newEvent.location}
+            onChange={(e) => setNewEvent({ ...newEvent, location: e.target.value })}
+          />
+          <input
+            type="datetime-local"
+            value={newEvent.dateTime}
+            onChange={(e) => setNewEvent({ ...newEvent, dateTime: e.target.value })}
+          />
+          <input
+            type="number"
+            placeholder="Duration (minutes)"
+            value={newEvent.duration}
+            onChange={(e) => setNewEvent({ ...newEvent, duration: e.target.value })}
+          />
+          <button onClick={createEvent}>Create Event</button>
+        </div>
+      )}
+
+      {currentUser ? (
+        <div>
+          {events.map((event) => (
+            <div key={event.id}>
+              <h2>{event.title}</h2>
+              <p>Location: {event.location}</p>
+              <p>Organizer: {event.organizer.username}</p>
+              <p>Duration: {event.duration}</p>
+              <p>Date: {event.date_time}</p>
+              <p>Joiners: {event.joiners.join(", ")}</p>
+              <p>
+                <button onClick={() => joinEvent(event.id)}>Join</button>
+                <button onClick={() => leaveEvent(event.id)}>Leave</button>
+              </p>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p>Please log in to view events.</p>
+      )}
     </div>
   );
 };
